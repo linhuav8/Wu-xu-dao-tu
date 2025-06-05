@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>戊戌变法人物关系网络图</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f3f4f6;
+            color: #1f2937;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background-color: #e5e7eb;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 50%;
+            border: 1px solid #d1d5db;
+        }
+        svg {
+            width: 100%;
+            height: auto;
+            min-height: 500px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+        }
+        .node circle {
+            stroke: #fff;
+            stroke-width: 1.5px;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2));
+            cursor: pointer; /* Add pointer cursor to circles */
+        }
+        .node text {
+            font-size: 12px;
+            fill: #374151;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+        .link {
+            stroke-opacity: 0.6;
+            stroke-width: 1.5px;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 8px;
+            font-size: 12px;
+            background: #374151;
+            color: white;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .controls div {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .controls label {
+            font-size: 0.9rem;
+        }
+        .controls input[type="range"] {
+            width: 150px;
+        }
+        .controls button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            background-color: #4f46e5;
+            color: white;
+            font-size: 0.9rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .controls button:hover {
+            background-color: #4338ca;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative; /* For close button positioning */
+        }
+        .modal-close-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 1.8rem;
+            line-height: 1;
+            color: #6b7280; /* Gray close button */
+            cursor: pointer;
+        }
+         .modal-close-button:hover {
+            color: #1f2937; /* Darker gray on hover */
+        }
+        .modal-content h2 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        .modal-content h3 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 5px;
+        }
+        .modal-content ul {
+            list-style-type: disc;
+            margin-left: 20px;
+            padding-left: 0;
+        }
+        .modal-content ul li {
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+         .modal-content p {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        /* Gemini Q&A Styles */
+        .gemini-qa-section {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9fafb; /* Lightest gray */
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .gemini-qa-section h2 {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .gemini-qa-section textarea {
+            width: 100%;
+            min-height: 80px;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            resize: vertical; /* Allow vertical resize */
+        }
+        .gemini-qa-section button {
+            display: block;
+            margin: 0 auto 15px auto; /* Center button */
+            padding: 10px 20px;
+            border-radius: 6px;
+            background-color: #10b981; /* Emerald button */
+            color: white;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .gemini-qa-section button:hover {
+            background-color: #059669; /* Darker emerald */
+        }
+        #gemini-response-area {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            min-height: 50px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            white-space: pre-wrap; /* Preserve line breaks from API response */
+        }
+
+
+        @media (max-width: 768px) {
+            .legend { flex-direction: column; align-items: flex-start; }
+            .container { width: 100%; margin: 10px 0; padding: 15px; border-radius: 0; }
+            .controls { flex-direction: column; align-items: center; }
+            .controls div, .controls button { width: 80%; justify-content: space-between; margin-bottom: 10px; }
+            .controls input[type="range"] { width: auto; flex-grow: 1; }
+            .modal-content { width: 95%; padding: 20px; }
+            .modal-content h2 { font-size: 1.3rem; }
+            .modal-content h3 { font-size: 1rem; }
+            .gemini-qa-section { margin-top: 20px; padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-2xl font-bold text-center mb-6">戊戌变法人物关系网络图</h1>
+
+        <div class="legend">
+            <div class="legend-item"><div class="legend-color" style="background-color: #60a5fa;"></div><span>帝党 / 维新派</span></div>
+            <div class="legend-item"><div class="legend-color" style="background-color: #f87171;"></div><span>后党 / 保守派</span></div>
+            <div class="legend-item"><div class="legend-color" style="background-color: #fbbf24;"></div><span>关键军事人物 / 中立或摇摆</span></div>
+        </div>
+
+        <div class="controls">
+            <div><label for="charge-slider">节点斥力:</label><input type="range" id="charge-slider" min="-2000" max="0" value="-500" step="50"></div>
+            <div><label for="link-distance-slider">连接距离:</label><input type="range" id="link-distance-slider" min="10" max="200" value="80" step="5"></div>
+            <button id="reset-button">重置视图</button>
+        </div>
+
+        <svg id="relationship-graph"></svg>
+        <div class="tooltip"></div>
+
+        <!-- Modal Structure -->
+        <div id="character-modal" class="modal-overlay">
+            <div class="modal-content">
+                <button id="modal-close" class="modal-close-button">&times;</button>
+                <h2 id="modal-character-name"></h2>
+                <h3>参与事件:</h3>
+                <ul id="modal-events-list"></ul>
+                <h3>与其他人物关系:</h3>
+                <div id="modal-relationships-list"></div>
+            </div>
+        </div>
+
+        <!-- Gemini Q&A Section -->
+        <div class="gemini-qa-section">
+            <h2>向 Gemini 提问</h2>
+            <textarea id="gemini-prompt" placeholder="在此输入您关于戊戌变法的问题..."></textarea>
+            <button id="ask-gemini-button">提问</button>
+            <div id="gemini-response-area">Gemini 的回答将显示在这里。</div>
+        </div>
+
+    </div>
+
+    <script>
+        // Enhanced Character Data with more detailed events
+        const characters = [
+            {
+                id: "光绪帝", name: "光绪帝", group: 1, details: "清朝皇帝, 支持变法, 希望收回实权",
+                events: [
+                    "甲午战败后，痛感国家危亡，立志改革。",
+                    "1898年6月11日，颁布《明定国是诏》，宣布实行变法。",
+                    "在百日维新期间，连续颁布上百道涉及政治、经济、军事、文化教育等方面的改革诏令。",
+                    "提拔康有为、梁启超、谭嗣同等维新派人士参与新政。",
+                    "试图通过改革削弱后党势力，收回最高统治权。",
+                    "戊戌政变中，被慈禧太后下令囚禁于中南海瀛台，失去人身自由，变法失败。"
+                ],
+                detailed_relationships: {
+                    "慈禧太后": "名义母子，实则权力斗争核心，受其压制，最终被其软禁。",
+                    "康有为": "倚重为变法主要顾问，多次召见，听取变法方略。",
+                    "翁同龢": "帝师，早期受其影响倾向变法，后被慈禧罢黜以削弱光绪势力。"
+                }
+            },
+            {
+                id: "康有为", name: "康有为", group: 1, details: "维新派领袖, 变法主要推动者",
+                events: [
+                    "1895年联合千余举人发动“公车上书”，提出变法主张。",
+                    "多次上书光绪帝，系统阐述变法理论和具体方案，如《上清帝第一书》至《上清帝第六书》。",
+                    "组织强学会、保国会等维新团体，创办《万国公报》（后改《中外纪闻》）宣传变法。",
+                    "获得光绪帝召见，被委以变法重任，成为百日维新的核心策划者。",
+                    "推动设立制度局、懋勤殿等机构以推进改革（未能完全实现）。",
+                    "变法失败后，在英国人帮助下经上海、香港流亡海外，继续进行保皇改良活动。"
+                ],
+                detailed_relationships: {
+                    "光绪帝": "受到光绪帝信任和重用，是变法的核心策划者与推动者。",
+                    "梁启超": "最得意的门生和最重要的助手，共同领导维新运动。",
+                    "谭嗣同": "重要维新同志，受其思想影响，共同参与变法核心事务。",
+                    "翁同龢": "通过翁同龢向光绪帝传递变法思想，但政见并非完全一致。",
+                    "袁世凯": "曾寄望于袁世凯的军事支持，但未成功。"
+                }
+            },
+            {
+                id: "梁启超", name: "梁启超", group: 1, details: "维新派骨干, 康有为学生",
+                events: [
+                    "协助康有为组织公车上书。",
+                    "在上海主编《时务报》，发表《变法通议》等文章，大力宣传维新思想，影响巨大。",
+                    "参与创办强学会、保国会等维新团体。",
+                    "百日维新期间，积极参与新政的推行，如负责京师大学堂译书局事务。",
+                    "变法失败后，在日本使馆帮助下逃亡日本，继续从事著述和政治活动。"
+                ],
+                detailed_relationships: { "康有为": "老师与政治领袖，紧密追随。", "谭嗣同": "志同道合的密友，共同为变法奔走。" }
+            },
+            {
+                id: "谭嗣同", name: "谭嗣同", group: 1, details: "维新派激进成员, 戊戌六君子之一",
+                events: [
+                    "早年受维新思想影响，在湖南参与创办时务学堂、南学会，推动湖南维新运动。",
+                    "受光绪帝征召入京，被破格任命为四品卿衔军机章京，参与新政核心决策。",
+                    "思想激进，主张进行更彻底的改革，提出“冲决网罗”等口号。",
+                    "变法危急时，为保全光绪帝和变法成果，于9月18日夜访法华寺袁世凯住所，图谋兵谏。",
+                    "戊戌政变后，拒绝友人劝其逃亡，表示“各国变法，无不从流血而成”，决心以身殉法。",
+                    "1898年9月28日，在北京菜市口被杀害，为“戊戌六君子”之一。"
+                ],
+                detailed_relationships: {
+                    "光绪帝": "受到赏识，被破格提拔参与新政核心。",
+                    "康有为": "敬佩其学识，是维新派核心成员，但思想更为激进。",
+                    "梁启超": "亲密战友，一同参与变法。",
+                    "袁世凯": "变法危急时，曾寄望于其兵力支持，但被袁世凯出卖。",
+                    "大刀王五": "江湖好友，传说曾助其营救行动但未果。"
+                }
+            },
+            { id: "康广仁", name: "康广仁", group: 1, details: "戊戌六君子之一, 康有为之弟", events: ["协助兄长康有为处理变法事务，如管理广仁善堂。", "参与维新派活动，支持变法。", "戊戌政变中被捕，与谭嗣同等人一同遇害。"], detailed_relationships: { "康有为": "兄长，受其影响参与维新。" } },
+            { id: "林旭", name: "林旭", group: 1, details: "戊戌六君子之一, 军机章京", events: ["福建举人，精通外文，思想开明。", "被光绪帝任命为四品卿衔军机章京，参与新政核心。", "负责处理奏章，草拟谕旨等变法具体事务。", "戊戌政变中被捕牺牲。"] },
+            { id: "杨深秀", name: "杨深秀", group: 1, details: "戊戌六君子之一, 山东道监察御史", events: ["科举出身，后接受维新思想。", "在变法期间，多次上书弹劾阻挠变法的旧臣，力主改革。", "戊戌政变中，因弹劾礼部尚书许应镕阻挠新政被捕，后遇害。"] },
+            { id: "杨锐", name: "杨锐", group: 1, details: "戊戌六君子之一, 军机章京", events: ["四川名士，张之洞得意门生，思想较为稳健。", "被光绪帝任命为四品卿衔军机章京，参与新政核心。", "在变法中传递光绪帝与维新派之间的信息。", "戊戌政变中被捕牺牲，有说法称其试图调和帝后矛盾。"] },
+            { id: "刘光第", name: "刘光第", group: 1, details: "戊戌六君子之一, 刑部主事", events: ["四川人，刑部主事，为人正直廉洁。", "同情并支持变法主张，曾参与保国会活动。", "戊戌政变中被捕，慷慨就义。"] },
+            {
+                id: "翁同龢", name: "翁同龢", group: 1, details: "光绪帝老师, 早期支持维新",
+                events: [
+                    "作为光绪帝的老师，早期向其灌输西方知识和变法思想。",
+                    "甲午战后，力主变法图强，向光绪帝推荐康有为。",
+                    "参与变法初期的策划，但其变法主张相对保守，与康有为等人有分歧。",
+                    "1898年6月15日，即变法开始仅4天，被慈禧太后下令罢黜协办大学士、军机大臣等职，逐回原籍。"
+                ],
+                detailed_relationships: { "光绪帝": "帝师，对光绪有重要影响，但后期因变法策略与光绪、康有为有分歧。", "慈禧太后": "因其支持光绪变法，并被视为帝党核心，被慈禧视为威胁而罢免。" }
+            },
+            {
+                id: "慈禧太后", name: "慈禧太后", group: 2, details: "清朝实际统治者, 反对激进变法",
+                events: [
+                    "甲午战后，为维持统治，对变法呼声采取默许态度，以观察局势发展。",
+                    "变法初期，通过罢黜翁同龢、任命荣禄等亲信掌握军政大权，限制光绪帝权力。",
+                    "对维新派的激进措施和可能触及其根本权力的改革日益警惕和不满。",
+                    "1898年9月21日，利用袁世凯告密提供的“口实”，发动戊戌政变，宣布重新“训政”。",
+                    "下令囚禁光绪帝于瀛台，捕杀维新党人，废除绝大部分新政。"
+                ],
+                detailed_relationships: {
+                    "光绪帝": "名义上的“母子”，实际上的权力掌控者，对光绪的变法意图高度警惕并最终镇压。",
+                    "荣禄": "最信任的军事大臣和政治亲信，是其发动政变、控制局势的主要依靠力量。",
+                    "刚毅": "极端保守派亲信，积极协助其反制维新派。",
+                    "康有为": "将其视为颠覆祖制的首要危险人物，下令严拿。"
+                }
+            },
+            {
+                id: "荣禄", name: "荣禄", group: 2, details: "慈禧亲信, 直隶总督, 保守派核心",
+                events: [
+                    "满洲正白旗人，慈禧太后重要亲信。",
+                    "1898年6月15日，被任命为直隶总督兼北洋大臣，总揽京畿地区军政大权。",
+                    "积极部署兵力，防范维新派可能采取的行动。",
+                    "接到袁世凯告密后，立即进京向慈禧太后汇报，促成政变发动。",
+                    "戊戌政变中，是慈禧太后镇压维新派、稳定局势的关键执行者。"
+                ],
+                detailed_relationships: { "慈禧太后": "忠实亲信，掌握军权为其巩固统治。", "袁世凯": "袁世凯向其告密，成为政变导火索之一。" }
+            },
+            { id: "刚毅", name: "刚毅", group: 2, details: "慈禧亲信, 极端保守", events: ["满洲镶蓝旗人，极端排外守旧。", "积极反对变法维新，主张严厉镇压维新派。", "参与戊戌政变的策划与执行，是后党核心成员。"], detailed_relationships: { "慈禧太后": "坚定的支持者和打手。" } },
+            { id: "徐桐", name: "徐桐", group: 2, details: "大学士, 保守派代表", events: ["汉军正蓝旗人，理学名臣，思想极端守旧。", "坚决反对学习西方，痛恨新学和变法，是顽固派的精神领袖之一。", "其住宅门上曾书“望气者不得入”。"] },
+            { id: "崇礼", name: "崇礼", group: 2, details: "慈禧提拔的军事将领, 步军统领", events: ["满洲镶黄旗人，慈禧亲信。", "变法期间被任命为步军统领（九门提督），负责北京内城和皇城的卫戍与治安。"] },
+            { id: "怀塔布", name: "怀塔布", group: 2, details: "慈禧提拔的军事将领, 掌管圆明园护军营", events: ["变法期间被任命掌管圆明园护军营（八旗、包衣三旗）及健锐营、火器营等京畿外围武装力量。"] },
+            {
+                id: "袁世凯", name: "袁世凯", group: 3, details: "新建陆军统领, 政治投机者, 告密者",
+                events: [
+                    "在天津小站负责编练中国第一支采用西法训练的新建陆军，治军严明，部队战斗力较强。",
+                    "变法期间，立场摇摆，与维新派和后党均有接触。",
+                    "1898年9月18日，谭嗣同夜访请求其发兵支持维新派，“围园劫后”。",
+                    "9月20日，向直隶总督荣禄告密，将维新派的计划和盘托出，直接导致政变提前爆发。",
+                    "戊戌政变后，因“告密有功”获得慈禧太后信任，仕途进一步上升，成为晚清重臣。"
+                ],
+                detailed_relationships: {
+                    "谭嗣同": "表面应承谭嗣同的请求，实际为了政治投机而出卖维新派。",
+                    "荣禄": "向其告密，提供镇压维新派的口实和时机。",
+                    "慈禧太后": "通过告密获得慈禧的赏识，成为其后倚重的人物之一。"
+                }
+            }
+        ];
+        // D3.js and other JS code (same as previous version for graph rendering and modal logic)
+        // ... (rest of the D3.js and graph interaction code from the previous version)
+
+        const relationships = [
+            { source: "光绪帝", target: "慈禧太后", type: "权力受控/对立" }, { source: "光绪帝", target: "康有为", type: "倚重/领导" }, { source: "光绪帝", target: "梁启超", type: "倚重" }, { source: "光绪帝", target: "谭嗣同", type: "倚重" }, { source: "光绪帝", target: "翁同龢", type: "师生/被罢黜" },
+            { source: "康有为", target: "梁启超", type: "师生/领袖" }, { source: "康有为", target: "谭嗣同", type: "师生/领袖" }, { source: "康有为", target: "康广仁", type: "兄弟" },
+            { source: "谭嗣同", target: "袁世凯", type: "试图争取/被出卖" },
+            { source: "谭嗣同", target: "康广仁", type: "同为六君子"}, { source: "谭嗣同", target: "林旭", type: "同为六君子"}, { source: "谭嗣同", target: "杨深秀", type: "同为六君子"}, { source: "谭嗣同", target: "杨锐", type: "同为六君子"}, { source: "谭嗣同", target: "刘光第", type: "同为六君子"},
+            { source: "康广仁", target: "林旭", type: "同为六君子"}, { source: "杨深秀", target: "杨锐", type: "同为六君子"}, { source: "林旭", target: "刘光第", type: "同为六君子"},
+            { source: "慈禧太后", target: "荣禄", type: "倚重/亲信" }, { source: "慈禧太后", target: "刚毅", type: "倚重/亲信" }, { source: "慈禧太后", target: "徐桐", type: "同派系" }, { source: "慈禧太后", target: "崇礼", type: "任用" }, { source: "慈禧太后", target: "怀塔布", type: "任用" }, { source: "慈禧太后", target: "翁同龢", type: "罢黜" },
+            { source: "荣禄", target: "袁世凯", type: "袁告密于荣" },
+        ];
+
+        const factionColors = { 1: "#60a5fa", 2: "#f87171", 3: "#fbbf24" };
+
+        const svg = d3.select("#relationship-graph");
+        const width = parseInt(svg.style("width"));
+        const height = Math.max(500, window.innerHeight * 0.65);
+        svg.attr("height", height);
+
+        const tooltip = d3.select(".tooltip");
+        const modal = d3.select("#character-modal");
+        const modalCharacterName = d3.select("#modal-character-name");
+        const modalEventsList = d3.select("#modal-events-list");
+        const modalRelationshipsList = d3.select("#modal-relationships-list");
+
+        let simulation = d3.forceSimulation(characters)
+            .force("link", d3.forceLink(relationships).id(d => d.id).distance(80))
+            .force("charge", d3.forceManyBody().strength(-500))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(25));
+
+        const link = svg.append("g").attr("class", "links").selectAll("line").data(relationships).join("line").attr("class", "link").style("stroke", "#9ca3af");
+
+        const node = svg.append("g").attr("class", "nodes").selectAll("g").data(characters).join("g").attr("class", "node").call(drag(simulation));
+
+        node.append("circle")
+            .attr("r", 12)
+            .attr("fill", d => factionColors[d.group])
+            .on("mouseover", function(event, d) {
+                if (modal.classed("active")) return;
+                tooltip.transition().duration(200).style("opacity", .9);
+                tooltip.html(`<strong>${d.name}</strong><br>${d.details}<br>阵营: ${getFactionName(d.group)}`)
+                    .style("left", (event.pageX + 15) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+                
+                d3.select(this).attr("r", 15).style("stroke", "#333").style("stroke-width", "2px");
+                link.style('stroke', l => (l.source.id === d.id || l.target.id === d.id) ? (factionColors[d.group] || '#333') : '#9ca3af')
+                    .style('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.3)
+                    .style('stroke-width', l => (l.source.id === d.id || l.target.id === d.id) ? 2.5 : 1.5);
+                node.selectAll("circle").filter(n => n !== d).style('opacity', n => isConnected(d, n) ? 1 : 0.3);
+                node.selectAll("text").filter(n => n !== d).style('opacity', n => isConnected(d, n) ? 1 : 0.3);
+            })
+            .on("mouseout", function(event, d) {
+                if (modal.classed("active")) return;
+                tooltip.transition().duration(500).style("opacity", 0);
+                d3.select(this).attr("r", 12).style("stroke", "#fff").style("stroke-width", "1.5px");
+                link.style('stroke', '#9ca3af').style('stroke-opacity', 0.6).style('stroke-width', 1.5);
+                node.selectAll("circle").style('opacity', 1);
+                node.selectAll("text").style('opacity', 1);
+            })
+            .on("click", function(event, d) {
+                event.stopPropagation();
+                tooltip.style("opacity", 0);
+                displayCharacterInfo(d);
+            });
+
+        node.append("text").text(d => d.name).attr("x", 0).attr("y", 22);
+
+        simulation.on("tick", () => {
+            link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+            node.attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+        
+        function displayCharacterInfo(characterData) {
+            modalCharacterName.text(characterData.name);
+            modalEventsList.html("");
+            if (characterData.events && characterData.events.length > 0) {
+                characterData.events.forEach(eventText => {
+                    modalEventsList.append("li").text(eventText);
+                });
+            } else {
+                modalEventsList.append("li").text("暂无详细事件信息。");
+            }
+            modalRelationshipsList.html("");
+            if (characterData.detailed_relationships && Object.keys(characterData.detailed_relationships).length > 0) {
+                Object.entries(characterData.detailed_relationships).forEach(([personId, description]) => {
+                    const relatedPersonObject = characters.find(c => c.id === personId || c.name === personId);
+                    const personName = relatedPersonObject ? relatedPersonObject.name : personId;
+                    modalRelationshipsList.append("p").html(`<strong>与 ${personName}:</strong> ${description}`);
+                });
+            } else {
+                modalRelationshipsList.append("p").text("暂无详细人物关系信息。");
+            }
+            modal.classed("active", true);
+        }
+
+        d3.select("#modal-close").on("click", function() { modal.classed("active", false); });
+        modal.on("click", function(event) { if (event.target === this) { modal.classed("active", false); } });
+
+        function getFactionName(group) {
+            if (group === 1) return "帝党 / 维新派";
+            if (group === 2) return "后党 / 保守派";
+            if (group === 3) return "关键军事人物 / 中立或摇摆";
+            return "未知";
+        }
+        
+        let linkedByIndex = {};
+        relationships.forEach(d => {
+            const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+            const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+            linkedByIndex[`${sourceId},${targetId}`] = 1;
+        });
+
+        function isConnected(a, b) { return linkedByIndex[`${a.id},${b.id}`] || linkedByIndex[`${b.id},${a.id}`] || a.id === b.id; }
+
+        function drag(simulation) {
+            function dragstarted(event, d) { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
+            function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+            function dragended(event, d) { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
+            return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
+        }
+
+        d3.select("#charge-slider").on("input", function() { simulation.force("charge").strength(+this.value); simulation.alpha(0.3).restart(); });
+        d3.select("#link-distance-slider").on("input", function() { simulation.force("link").distance(+this.value); simulation.alpha(0.3).restart(); });
+        d3.select("#reset-button").on("click", function() {
+            d3.select("#charge-slider").property("value", -500);
+            d3.select("#link-distance-slider").property("value", 80);
+            simulation.force("charge").strength(-500);
+            simulation.force("link").distance(80);
+            characters.forEach(node => { node.fx = null; node.fy = null; });
+            simulation.alpha(1).restart();
+        });
+
+        window.addEventListener('resize', () => {
+            const newWidth = parseInt(d3.select("#relationship-graph").style("width"));
+            const newHeight = Math.max(500, window.innerHeight * 0.65);
+            svg.attr("height", newHeight);
+            simulation.force("center", d3.forceCenter(newWidth / 2, newHeight / 2));
+            simulation.alpha(0.3).restart();
+        });
+
+        // Gemini API Integration
+        const askGeminiButton = document.getElementById('ask-gemini-button');
+        const geminiPromptTextarea = document.getElementById('gemini-prompt');
+        const geminiResponseArea = document.getElementById('gemini-response-area');
+
+        askGeminiButton.addEventListener('click', async () => {
+            const prompt = geminiPromptTextarea.value.trim();
+            if (!prompt) {
+                geminiResponseArea.textContent = '请输入您的问题。';
+                return;
+            }
+
+            geminiResponseArea.textContent = '正在思考中...';
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            // Using the API key provided by the user.
+            const apiKey = "AIzaSyAr7LD7BWmgWfC3TaG0IdP5_BeHsMZJpbM"; // User-provided API key
+            // Updated API URL to use gemini-2.5-pro as requested by the user.
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
+
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Gemini API Error:', errorData);
+                    geminiResponseArea.textContent = `抱歉，调用API时出错: ${errorData.error?.message || response.statusText}`;
+                    return;
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    geminiResponseArea.textContent = text;
+                } else {
+                    console.error('Unexpected API response structure:', result);
+                    geminiResponseArea.textContent = '抱歉，未能从API获取有效回答。';
+                    if (result.promptFeedback && result.promptFeedback.blockReason) {
+                         geminiResponseArea.textContent += `\n原因: ${result.promptFeedback.blockReason}`;
+                         if (result.promptFeedback.safetyRatings) {
+                            result.promptFeedback.safetyRatings.forEach(rating => {
+                                if (rating.blocked) {
+                                     geminiResponseArea.textContent += ` (${rating.category} 被阻止)`;
+                                }
+                            });
+                         }
+                    }
+                }
+            } catch (error) {
+                console.error('Fetch Error:', error);
+                geminiResponseArea.textContent = `抱歉，请求过程中发生网络错误: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
